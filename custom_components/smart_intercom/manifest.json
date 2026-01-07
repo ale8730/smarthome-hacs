@@ -1,0 +1,13 @@
+{
+    "domain": "smart_intercom",
+    "name": "SmartIntercom",
+    "version": "1.0.0",
+    "documentation": "https://github.com/ale8730/SmartIntercom",
+    "issue_tracker": "https://github.com/ale8730/SmartIntercom/issues",
+    "codeowners": ["@ale8730"],
+    "requirements": ["websockets>=10.0"],
+    "dependencies": [],
+    "config_flow": true,
+    "iot_class": "local_push",
+    "integration_type": "device"
+}

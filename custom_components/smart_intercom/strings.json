@@ -1,0 +1,25 @@
+{
+    "title": "SmartIntercom Setup",
+    "config": {
+        "step": {
+            "user": {
+                "title": "SmartIntercom Setup",
+                "description": "Configure connection to your SmartIntercom ESP32 device.",
+                "data": {
+                    "host": "Host (IP Address)",
+                    "port": "Port",
+                    "secret_key": "Secret Key",
+                    "enable_audio": "Enable Audio Streaming"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "Cannot connect to device. Check IP address and port.",
+            "invalid_auth": "Invalid secret key.",
+            "unknown": "An unknown error occurred."
+        },
+        "abort": {
+            "already_configured": "This device is already configured."
+        }
+    }
+}

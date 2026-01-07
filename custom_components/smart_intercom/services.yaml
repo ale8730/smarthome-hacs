@@ -1,0 +1,39 @@
+set_marquee_field:
+  name: Set Marquee Field
+  description: Set a marquee field on the OLED display with icon and text
+  fields:
+    index:
+      name: Field Index
+      description: Which marquee field to set (0, 1, or 2)
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 2
+          mode: box
+    icon:
+      name: Icon Path
+      description: Path to XBM icon file (e.g., /icons/10x10/home.xbm)
+      required: false
+      selector:
+        text:
+    text:
+      name: Text
+      description: Text to display in the marquee field
+      required: true
+      selector:
+        text:
+
+clear_marquee_field:
+  name: Clear Marquee Field
+  description: Clear a marquee field from the OLED display
+  fields:
+    index:
+      name: Field Index
+      description: Which marquee field to clear (0, 1, or 2)
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 2
+          mode: box

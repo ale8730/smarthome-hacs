@@ -1,0 +1,103 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "SmartIntercom Setup",
+                "description": "Configure connection to your SmartIntercom ESP32 device.",
+                "data": {
+                    "host": "Host (IP Address)",
+                    "port": "Port",
+                    "secret_key": "Secret Key",
+                    "enable_audio": "Enable Audio Streaming"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "Cannot connect to device. Check IP address and port.",
+            "invalid_auth": "Invalid secret key.",
+            "unknown": "An unknown error occurred."
+        },
+        "abort": {
+            "already_configured": "This device is already configured."
+        }
+    },
+    "entity": {
+        "button": {
+            "doorbell": {
+                "name": "Doorbell"
+            },
+            "start_alarm": {
+                "name": "Start Alarm"
+            },
+            "stop_alarm": {
+                "name": "Stop Alarm"
+            },
+            "start_stream": {
+                "name": "Start Full-Duplex"
+            },
+            "stop_stream": {
+                "name": "Stop Full-Duplex"
+            },
+            "start_listen": {
+                "name": "Start Listen"
+            },
+            "stop_listen": {
+                "name": "Stop Listen"
+            },
+            "start_speak": {
+                "name": "Start Speak"
+            },
+            "stop_speak": {
+                "name": "Stop Speak"
+            }
+        },
+        "sensor": {
+            "connection_status": {
+                "name": "Connection Status"
+            },
+            "streaming_mode": {
+                "name": "Streaming Mode"
+            },
+            "mic_gain_sensor": {
+                "name": "Mic Gain Level"
+            },
+            "speaker_gain_sensor": {
+                "name": "Speaker Gain Level"
+            }
+        },
+        "number": {
+            "mic_gain": {
+                "name": "Microphone Gain"
+            },
+            "speaker_gain": {
+                "name": "Speaker Gain"
+            }
+        },
+        "text": {
+            "display_line1": {
+                "name": "Display Line 1"
+            },
+            "display_line2": {
+                "name": "Display Line 2"
+            },
+            "external_text": {
+                "name": "External Text"
+            }
+        },
+        "media_player": {
+            "audio_stream": {
+                "name": "Audio Stream"
+            }
+        }
+    },
+    "services": {
+        "set_marquee_field": {
+            "name": "Set Marquee Field",
+            "description": "Set a marquee field on the OLED display."
+        },
+        "clear_marquee_field": {
+            "name": "Clear Marquee Field",
+            "description": "Clear a marquee field from the OLED display."
+        }
+    }
+}
