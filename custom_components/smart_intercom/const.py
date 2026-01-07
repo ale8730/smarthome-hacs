@@ -59,5 +59,5 @@ ENTITY_MIC_GAIN = "mic_gain"
 ENTITY_SPEAKER_GAIN = "speaker_gain"
 
 # Platforms to setup
-PLATFORMS = ["button", "sensor", "number", "text", "select", "media_player"]
+PLATFORMS = ["button", "sensor", "number", "text", "select"]
 
