@@ -265,8 +265,6 @@ name: Front Door Intercom      # Card title
 show_full_duplex: true
 show_listen: true
 show_speak: true
-show_doorbell: true
-show_alarm: true
 show_gain: true
 show_visualizer: true
 
@@ -276,18 +274,19 @@ labels:
   listen: "Listen"
   speak: "Speak"
   stop: "Stop"
-  doorbell: "Ring Bell"
-  alarm_start: "Alarm"
-  alarm_stop: "Stop Alarm"
   mic_gain: "Microphone"
   speaker_gain: "Speaker"
 
-# Custom colors (CSS color values)
+# Button background colors (hover = same color darkened)
+button_colors:
+  full_duplex: "#2196f3"       # Blue
+  listen: "#9c27b0"            # Purple
+  speak: "#ff9800"             # Orange
+  stop: "#f44336"              # Red
+
+# Theme colors
 colors:
-  primary: "var(--primary-color)"    # Default HA primary
-  streaming: "#4caf50"               # Green when streaming
-  stop: "#f44336"                    # Red for stop button
-  secondary: "#757575"               # Secondary text
+  streaming: "#4caf50"               # Green when active
   visualizer: "var(--primary-color)" # Visualizer bars
 ```
 
@@ -308,8 +307,6 @@ host: 192.168.1.100
 secret_key: SmartIntercom2026
 show_full_duplex: false
 show_speak: false
-show_doorbell: false
-show_alarm: false
 show_gain: false
 ```
 
@@ -318,11 +315,11 @@ show_gain: false
 - 📞 **Full-Duplex** - Two-way conversation with ESP32
 - 👂 **Listen Mode** - Monitor intercom microphone
 - 📢 **Speak Mode** - Send audio to ESP32 speaker
-- 🔔 **Quick Actions** - Doorbell, Alarm buttons
 - 🎚️ **Gain Sliders** - Adjust mic/speaker volume
 - 🔒 **SSL Support** - Works with HTTPS reverse proxy
-- 🎨 **Customizable** - Labels, colors, and button visibility
+- 🎨 **Customizable** - Button colors, labels, and visibility
 - 🏠 **HA Native Styling** - Matches your Home Assistant theme
+
 
 
 ## ⚠️ HTTPS / Mixed Content Issue

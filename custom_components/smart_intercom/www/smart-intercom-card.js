@@ -2,9 +2,9 @@
  * SmartIntercom Card - Custom Lovelace Card for Home Assistant
  * 
  * Features:
+ * - Syncs with ESP32 state (streaming, alarm, doorbell)
  * - MDI icons with HA native styling
  * - Fully customizable labels and colors
- * - Toggle visibility for each button group
  * - Real-time audio streaming (Full-duplex, Listen, Speak)
  * - Audio visualizer
  */
@@ -22,9 +22,16 @@ class SmartIntercomCard extends HTMLElement {
         this._streamMode = 'idle';
         this._authenticated = false;
         this._nextPlayTime = 0;
+        this._statusInterval = null;
+        this._espState = {
+            full_duplex: false,
+            listen: false,
+            speak: false,
+            alarm_active: false,
+            busy: false
+        };
     }
 
-    // Provide card info for HA card picker
     static getStubConfig() {
         return {
             host: "192.168.1.100",
@@ -42,43 +49,34 @@ class SmartIntercomCard extends HTMLElement {
     setConfig(config) {
         if (!config.host) throw new Error('Please specify the host (IP or domain)');
 
-        // Default configuration with all options
         this._config = {
-            // Connection
             host: config.host,
             port: config.port || (config.use_ssl ? 443 : 80),
             secret_key: config.secret_key || '',
             use_ssl: config.use_ssl || false,
             name: config.name || 'SmartIntercom',
-
-            // Button visibility
             show_full_duplex: config.show_full_duplex !== false,
             show_listen: config.show_listen !== false,
             show_speak: config.show_speak !== false,
-            show_doorbell: config.show_doorbell !== false,
-            show_alarm: config.show_alarm !== false,
             show_gain: config.show_gain !== false,
             show_visualizer: config.show_visualizer !== false,
-
-            // Custom labels
             labels: {
                 full_duplex: config.labels?.full_duplex || 'Full Duplex',
                 listen: config.labels?.listen || 'Listen',
                 speak: config.labels?.speak || 'Speak',
                 stop: config.labels?.stop || 'Stop',
-                doorbell: config.labels?.doorbell || 'Doorbell',
-                alarm_start: config.labels?.alarm_start || 'Alarm',
-                alarm_stop: config.labels?.alarm_stop || 'Stop Alarm',
                 mic_gain: config.labels?.mic_gain || 'Microphone',
                 speaker_gain: config.labels?.speaker_gain || 'Speaker',
+                busy: config.labels?.busy || 'Device Busy',
             },
-
-            // Custom colors
+            button_colors: {
+                full_duplex: config.button_colors?.full_duplex || '#2196f3',
+                listen: config.button_colors?.listen || '#9c27b0',
+                speak: config.button_colors?.speak || '#ff9800',
+                stop: config.button_colors?.stop || '#f44336',
+            },
             colors: {
-                primary: config.colors?.primary || 'var(--primary-color)',
                 streaming: config.colors?.streaming || '#4caf50',
-                stop: config.colors?.stop || '#f44336',
-                secondary: config.colors?.secondary || 'var(--secondary-text-color)',
                 visualizer: config.colors?.visualizer || 'var(--primary-color)',
             },
         };
@@ -86,53 +84,88 @@ class SmartIntercomCard extends HTMLElement {
         this._render();
     }
 
+    disconnectedCallback() {
+        if (this._statusInterval) {
+            clearInterval(this._statusInterval);
+        }
+        if (this._ws) {
+            this._ws.close();
+        }
+    }
+
     getCardSize() {
         return 3;
+    }
+
+    _darkenColor(color, percent) {
+        if (color.startsWith('var(')) return color;
+        if (!color.startsWith('#')) return color;
+
+        let r = parseInt(color.slice(1, 3), 16);
+        let g = parseInt(color.slice(3, 5), 16);
+        let b = parseInt(color.slice(5, 7), 16);
+
+        r = Math.max(0, Math.floor(r * (1 - percent / 100)));
+        g = Math.max(0, Math.floor(g * (1 - percent / 100)));
+        b = Math.max(0, Math.floor(b * (1 - percent / 100)));
+
+        return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
     }
 
     _render() {
         const config = this._config;
         const labels = config.labels;
+        const btnColors = config.button_colors;
         const colors = config.colors;
+
+        const hoverColors = {
+            full_duplex: this._darkenColor(btnColors.full_duplex, 20),
+            listen: this._darkenColor(btnColors.listen, 20),
+            speak: this._darkenColor(btnColors.speak, 20),
+            stop: this._darkenColor(btnColors.stop, 20),
+        };
 
         this.shadowRoot.innerHTML = `
             <style>
                 :host {
-                    --card-primary: ${colors.primary};
+                    --btn-full-duplex: ${btnColors.full_duplex};
+                    --btn-full-duplex-hover: ${hoverColors.full_duplex};
+                    --btn-listen: ${btnColors.listen};
+                    --btn-listen-hover: ${hoverColors.listen};
+                    --btn-speak: ${btnColors.speak};
+                    --btn-speak-hover: ${hoverColors.speak};
+                    --btn-stop: ${btnColors.stop};
+                    --btn-stop-hover: ${hoverColors.stop};
                     --card-streaming: ${colors.streaming};
-                    --card-stop: ${colors.stop};
-                    --card-secondary: ${colors.secondary};
                     --card-visualizer: ${colors.visualizer};
                 }
-                
-                ha-card {
-                    padding: 16px;
-                }
-                
+
+                ha-card { padding: 16px; }
+
                 .header {
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
                     margin-bottom: 16px;
                 }
-                
+
                 .header-left {
                     display: flex;
                     align-items: center;
                     gap: 12px;
                 }
-                
+
                 .header-icon {
-                    color: var(--card-primary);
+                    color: var(--primary-color);
                     --mdc-icon-size: 32px;
                 }
-                
+
                 .title {
                     font-size: 1.2em;
                     font-weight: 500;
                     color: var(--primary-text-color);
                 }
-                
+
                 .status-badge {
                     font-size: 0.75em;
                     padding: 4px 12px;
@@ -140,28 +173,29 @@ class SmartIntercomCard extends HTMLElement {
                     font-weight: 500;
                     text-transform: uppercase;
                 }
-                
-                .status-badge.disconnected {
-                    background: rgba(244, 67, 54, 0.1);
-                    color: #f44336;
-                }
-                
-                .status-badge.connected {
-                    background: rgba(76, 175, 80, 0.1);
-                    color: #4caf50;
-                }
-                
-                .status-badge.streaming {
-                    background: rgba(33, 150, 243, 0.1);
-                    color: #2196f3;
-                    animation: pulse 1.5s infinite;
-                }
-                
+
+                .status-badge.disconnected { background: rgba(244, 67, 54, 0.1); color: #f44336; }
+                .status-badge.connected { background: rgba(76, 175, 80, 0.1); color: #4caf50; }
+                .status-badge.streaming { background: rgba(33, 150, 243, 0.1); color: #2196f3; animation: pulse 1.5s infinite; }
+                .status-badge.busy { background: rgba(255, 152, 0, 0.1); color: #ff9800; }
+
                 @keyframes pulse {
                     0%, 100% { opacity: 1; }
                     50% { opacity: 0.6; }
                 }
-                
+
+                .busy-notice {
+                    background: rgba(255, 152, 0, 0.1);
+                    color: #ff9800;
+                    padding: 12px;
+                    border-radius: 8px;
+                    text-align: center;
+                    margin-bottom: 16px;
+                    display: none;
+                }
+
+                .busy-notice.show { display: block; }
+
                 .visualizer {
                     height: 40px;
                     background: var(--card-background-color, #1c1c1c);
@@ -174,7 +208,7 @@ class SmartIntercomCard extends HTMLElement {
                     padding: 4px 8px;
                     overflow: hidden;
                 }
-                
+
                 .bar {
                     width: 4px;
                     background: var(--card-visualizer);
@@ -182,11 +216,9 @@ class SmartIntercomCard extends HTMLElement {
                     height: 4px;
                     transition: height 0.1s ease;
                 }
-                
-                .section {
-                    margin-bottom: 16px;
-                }
-                
+
+                .section { margin-bottom: 16px; }
+
                 .section-label {
                     font-size: 0.75em;
                     color: var(--secondary-text-color);
@@ -194,13 +226,13 @@ class SmartIntercomCard extends HTMLElement {
                     letter-spacing: 0.5px;
                     margin-bottom: 8px;
                 }
-                
+
                 .btn-group {
                     display: flex;
                     gap: 8px;
                     flex-wrap: wrap;
                 }
-                
+
                 .btn {
                     flex: 1;
                     min-width: 80px;
@@ -208,72 +240,61 @@ class SmartIntercomCard extends HTMLElement {
                     flex-direction: column;
                     align-items: center;
                     justify-content: center;
-                    padding: 12px 8px;
+                    padding: 16px 8px;
                     border: none;
                     border-radius: 12px;
                     cursor: pointer;
-                    background: var(--card-background-color, rgba(0,0,0,0.1));
-                    color: var(--primary-text-color);
+                    color: white;
                     transition: all 0.2s ease;
-                    gap: 4px;
+                    gap: 6px;
                 }
-                
-                .btn:hover {
-                    background: var(--card-primary);
-                    color: white;
+
+                .btn:hover:not(:disabled) {
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
                 }
-                
-                .btn.active {
-                    background: var(--card-streaming);
-                    color: white;
+
+                .btn:disabled {
+                    opacity: 0.4;
+                    cursor: not-allowed;
                 }
-                
-                .btn.stop {
-                    background: var(--card-stop);
-                    color: white;
-                    flex: 0 0 100%;
-                }
-                
-                .btn.stop:hover {
-                    filter: brightness(1.1);
-                }
-                
-                .btn.hidden {
-                    display: none;
-                }
-                
-                .btn ha-icon {
-                    --mdc-icon-size: 24px;
-                }
-                
-                .btn-label {
-                    font-size: 0.75em;
-                    font-weight: 500;
-                }
-                
-                .gain-section {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 12px;
-                }
-                
+
+                .btn.full-duplex { background: var(--btn-full-duplex); }
+                .btn.full-duplex:hover:not(:disabled) { background: var(--btn-full-duplex-hover); }
+
+                .btn.listen { background: var(--btn-listen); }
+                .btn.listen:hover:not(:disabled) { background: var(--btn-listen-hover); }
+
+                .btn.speak { background: var(--btn-speak); }
+                .btn.speak:hover:not(:disabled) { background: var(--btn-speak-hover); }
+
+                .btn.stop { background: var(--btn-stop); flex: 0 0 100%; }
+                .btn.stop:hover:not(:disabled) { background: var(--btn-stop-hover); }
+
+                .btn.streaming { background: var(--card-streaming) !important; animation: pulse 1.5s infinite; }
+
+                .btn.hidden { display: none; }
+
+                .btn ha-icon { --mdc-icon-size: 28px; }
+
+                .btn-label { font-size: 0.8em; font-weight: 500; }
+
+                .gain-section { display: flex; flex-direction: column; gap: 12px; }
+
                 .gain-row {
                     display: flex;
                     align-items: center;
                     gap: 12px;
                 }
-                
-                .gain-row ha-icon {
-                    color: var(--card-secondary);
-                    --mdc-icon-size: 20px;
-                }
-                
+
+                .gain-row ha-icon { color: var(--secondary-text-color); --mdc-icon-size: 20px; }
+
                 .gain-row label {
                     flex: 0 0 80px;
                     font-size: 0.85em;
                     color: var(--secondary-text-color);
                 }
-                
+
                 .gain-row input[type="range"] {
                     flex: 1;
                     height: 4px;
@@ -282,37 +303,37 @@ class SmartIntercomCard extends HTMLElement {
                     border-radius: 2px;
                     outline: none;
                 }
-                
+
                 .gain-row input[type="range"]::-webkit-slider-thumb {
                     -webkit-appearance: none;
                     width: 16px;
                     height: 16px;
                     border-radius: 50%;
-                    background: var(--card-primary);
+                    background: var(--primary-color);
                     cursor: pointer;
                 }
-                
+
                 .gain-value {
                     flex: 0 0 40px;
                     font-size: 0.85em;
                     color: var(--primary-text-color);
                     text-align: right;
                 }
-                
+
                 .error {
-                    color: var(--card-stop);
+                    color: #f44336;
                     font-size: 0.85em;
                     margin-top: 8px;
                     display: none;
                 }
-                
+
                 .divider {
                     height: 1px;
                     background: var(--divider-color);
                     margin: 16px 0;
                 }
             </style>
-            
+
             <ha-card>
                 <div class="header">
                     <div class="header-left">
@@ -321,66 +342,46 @@ class SmartIntercomCard extends HTMLElement {
                     </div>
                     <span class="status-badge disconnected" id="status">Disconnected</span>
                 </div>
-                
+
+                <div class="busy-notice" id="busy-notice">
+                    <ha-icon icon="mdi:alarm-light" style="--mdc-icon-size: 20px;"></ha-icon>
+                    ${labels.busy}
+                </div>
+
                 ${config.show_visualizer ? `
                 <div class="visualizer" id="visualizer">
                     ${Array(24).fill('<div class="bar"></div>').join('')}
                 </div>
                 ` : ''}
-                
+
                 <div class="section">
                     <div class="section-label">Audio Streaming</div>
                     <div class="btn-group">
                         ${config.show_full_duplex ? `
-                        <button class="btn" id="btn-fd" onclick="this.getRootNode().host._startStreaming('full_duplex', true, true)">
+                        <button class="btn full-duplex" id="btn-fd">
                             <ha-icon icon="mdi:phone"></ha-icon>
                             <span class="btn-label">${labels.full_duplex}</span>
                         </button>
                         ` : ''}
                         ${config.show_listen ? `
-                        <button class="btn" id="btn-listen" onclick="this.getRootNode().host._startStreaming('listen', true, false)">
+                        <button class="btn listen" id="btn-listen">
                             <ha-icon icon="mdi:ear-hearing"></ha-icon>
                             <span class="btn-label">${labels.listen}</span>
                         </button>
                         ` : ''}
                         ${config.show_speak ? `
-                        <button class="btn" id="btn-speak" onclick="this.getRootNode().host._startStreaming('speak', false, true)">
+                        <button class="btn speak" id="btn-speak">
                             <ha-icon icon="mdi:bullhorn"></ha-icon>
                             <span class="btn-label">${labels.speak}</span>
                         </button>
                         ` : ''}
-                        <button class="btn stop hidden" id="btn-stop" onclick="this.getRootNode().host._stopStreaming()">
+                        <button class="btn stop hidden" id="btn-stop">
                             <ha-icon icon="mdi:stop"></ha-icon>
                             <span class="btn-label">${labels.stop}</span>
                         </button>
                     </div>
                 </div>
-                
-                ${(config.show_doorbell || config.show_alarm) ? `
-                <div class="divider"></div>
-                <div class="section">
-                    <div class="section-label">Actions</div>
-                    <div class="btn-group">
-                        ${config.show_doorbell ? `
-                        <button class="btn" onclick="this.getRootNode().host._sendCommand('doorbell')">
-                            <ha-icon icon="mdi:bell"></ha-icon>
-                            <span class="btn-label">${labels.doorbell}</span>
-                        </button>
-                        ` : ''}
-                        ${config.show_alarm ? `
-                        <button class="btn" id="btn-alarm-start" onclick="this.getRootNode().host._sendCommand('start_alarm')">
-                            <ha-icon icon="mdi:alarm-light"></ha-icon>
-                            <span class="btn-label">${labels.alarm_start}</span>
-                        </button>
-                        <button class="btn hidden" id="btn-alarm-stop" onclick="this.getRootNode().host._sendCommand('stop_alarm')">
-                            <ha-icon icon="mdi:alarm-off"></ha-icon>
-                            <span class="btn-label">${labels.alarm_stop}</span>
-                        </button>
-                        ` : ''}
-                    </div>
-                </div>
-                ` : ''}
-                
+
                 ${config.show_gain ? `
                 <div class="divider"></div>
                 <div class="section">
@@ -389,29 +390,170 @@ class SmartIntercomCard extends HTMLElement {
                         <div class="gain-row">
                             <ha-icon icon="mdi:microphone"></ha-icon>
                             <label>${labels.mic_gain}</label>
-                            <input type="range" min="10" max="500" value="100" id="mic-gain" 
-                                   oninput="this.getRootNode().host._updateGainDisplay('mic', this.value)"
-                                   onchange="this.getRootNode().host._sendCommand('set_mic_gain', {value: this.value / 100})">
+                            <input type="range" min="10" max="500" value="100" id="mic-gain">
                             <span class="gain-value" id="mic-gain-value">1.0</span>
                         </div>
                         <div class="gain-row">
                             <ha-icon icon="mdi:volume-high"></ha-icon>
                             <label>${labels.speaker_gain}</label>
-                            <input type="range" min="10" max="300" value="100" id="speaker-gain"
-                                   oninput="this.getRootNode().host._updateGainDisplay('speaker', this.value)"
-                                   onchange="this.getRootNode().host._sendCommand('set_speaker_gain', {value: this.value / 100})">
+                            <input type="range" min="10" max="300" value="100" id="speaker-gain">
                             <span class="gain-value" id="speaker-gain-value">1.0</span>
                         </div>
                     </div>
                 </div>
                 ` : ''}
-                
+
                 <div class="error" id="error"></div>
             </ha-card>
         `;
 
-        // Connect after render
-        setTimeout(() => this._connect(), 500);
+        // Attach event listeners after render
+        setTimeout(() => {
+            this._attachEventListeners();
+            this._connect();
+            this._startStatusPolling();
+        }, 100);
+    }
+
+    _attachEventListeners() {
+        const btnFd = this.shadowRoot.getElementById('btn-fd');
+        const btnListen = this.shadowRoot.getElementById('btn-listen');
+        const btnSpeak = this.shadowRoot.getElementById('btn-speak');
+        const btnStop = this.shadowRoot.getElementById('btn-stop');
+        const micGain = this.shadowRoot.getElementById('mic-gain');
+        const speakerGain = this.shadowRoot.getElementById('speaker-gain');
+
+        if (btnFd) btnFd.addEventListener('click', () => this._startStreaming('full_duplex', true, true));
+        if (btnListen) btnListen.addEventListener('click', () => this._startStreaming('listen', true, false));
+        if (btnSpeak) btnSpeak.addEventListener('click', () => this._startStreaming('speak', false, true));
+        if (btnStop) btnStop.addEventListener('click', () => this._stopStreaming());
+
+        if (micGain) {
+            micGain.addEventListener('input', (e) => this._updateGainDisplay('mic', e.target.value));
+            micGain.addEventListener('change', (e) => this._sendCommand('set_mic_gain', { value: e.target.value / 100 }));
+        }
+        if (speakerGain) {
+            speakerGain.addEventListener('input', (e) => this._updateGainDisplay('speaker', e.target.value));
+            speakerGain.addEventListener('change', (e) => this._sendCommand('set_speaker_gain', { value: e.target.value / 100 }));
+        }
+    }
+
+    _startStatusPolling() {
+        // Fetch status immediately
+        this._fetchStatus();
+
+        // Poll every 3 seconds
+        this._statusInterval = setInterval(() => this._fetchStatus(), 3000);
+    }
+
+    async _fetchStatus() {
+        const protocol = this._config.use_ssl ? 'https' : 'http';
+        const port = this._config.port;
+        const baseUrl = (this._config.use_ssl && port === 443)
+            ? `${protocol}://${this._config.host}`
+            : `${protocol}://${this._config.host}:${port}`;
+
+        try {
+            const response = await fetch(`${baseUrl}/status`);
+            if (response.ok) {
+                const data = await response.json();
+                this._updateEspState(data);
+            }
+        } catch (err) {
+            // Silently fail - WebSocket status will be primary
+        }
+    }
+
+    _updateEspState(data) {
+        const streaming = data.streaming || {};
+        const audio = data.audio || {};
+
+        this._espState = {
+            full_duplex: streaming.full_duplex || false,
+            listen: streaming.listen || false,
+            speak: streaming.speak || false,
+            alarm_active: audio.alarm_active || false,
+            doorbell_playing: audio.doorbell_playing || false,
+            busy: (audio.alarm_active || audio.doorbell_playing) || false
+        };
+
+        // Determine current mode from ESP32 state
+        let currentMode = 'idle';
+        if (streaming.full_duplex) currentMode = 'full_duplex';
+        else if (streaming.listen) currentMode = 'listen';
+        else if (streaming.speak) currentMode = 'speak';
+
+        // Update UI based on ESP32 state
+        this._updateUIForState(currentMode);
+
+        // Update gain values if provided
+        if (audio.mic_gain !== undefined) {
+            const micGain = this.shadowRoot.getElementById('mic-gain');
+            if (micGain) {
+                micGain.value = Math.round(audio.mic_gain * 100);
+                this._updateGainDisplay('mic', micGain.value);
+            }
+        }
+        if (audio.speaker_gain !== undefined) {
+            const speakerGain = this.shadowRoot.getElementById('speaker-gain');
+            if (speakerGain) {
+                speakerGain.value = Math.round(audio.speaker_gain * 100);
+                this._updateGainDisplay('speaker', speakerGain.value);
+            }
+        }
+    }
+
+    _updateUIForState(mode) {
+        const busyNotice = this.shadowRoot.getElementById('busy-notice');
+        const btnFd = this.shadowRoot.getElementById('btn-fd');
+        const btnListen = this.shadowRoot.getElementById('btn-listen');
+        const btnSpeak = this.shadowRoot.getElementById('btn-speak');
+        const btnStop = this.shadowRoot.getElementById('btn-stop');
+
+        // Show busy notice if alarm or doorbell is active
+        if (busyNotice) {
+            busyNotice.classList.toggle('show', this._espState.busy);
+        }
+
+        // If device is busy (alarm or doorbell), disable all buttons
+        if (this._espState.busy) {
+            if (btnFd) btnFd.disabled = true;
+            if (btnListen) btnListen.disabled = true;
+            if (btnSpeak) btnSpeak.disabled = true;
+            this._updateStatus(this._config.labels.busy, 'busy');
+            return;
+        }
+
+        // If ESP32 is streaming (possibly started from another client)
+        if (mode !== 'idle') {
+            // Sync local state
+            this._isStreaming = true;
+            this._streamMode = mode;
+
+            // Show stop button, hide start buttons
+            if (btnFd) btnFd.classList.add('hidden');
+            if (btnListen) btnListen.classList.add('hidden');
+            if (btnSpeak) btnSpeak.classList.add('hidden');
+            if (btnStop) btnStop.classList.remove('hidden');
+
+            this._updateStatus(mode.replace('_', ' ').toUpperCase(), 'streaming');
+        } else {
+            // Idle - enable buttons
+            if (btnFd) { btnFd.disabled = false; btnFd.classList.remove('hidden'); }
+            if (btnListen) { btnListen.disabled = false; btnListen.classList.remove('hidden'); }
+            if (btnSpeak) { btnSpeak.disabled = false; btnSpeak.classList.remove('hidden'); }
+            if (btnStop) btnStop.classList.add('hidden');
+
+            if (this._authenticated) {
+                this._updateStatus('Connected', 'connected');
+            }
+
+            // Reset local state
+            if (this._isStreaming && !this._espState.full_duplex && !this._espState.listen && !this._espState.speak) {
+                this._isStreaming = false;
+                this._streamMode = 'idle';
+            }
+        }
     }
 
     _connect() {
@@ -439,8 +581,9 @@ class SmartIntercomCard extends HTMLElement {
                     if (data.type === 'auth_success') {
                         this._authenticated = true;
                         this._updateStatus('Connected', 'connected');
+                        this._fetchStatus(); // Get current state after auth
                     } else if (data.type === 'auth_failed') {
-                        this._showError('Authentication failed - check secret key');
+                        this._showError('Authentication failed');
                     }
                 } else if (this._isStreaming && this._enablePlayback) {
                     this._playAudio(e.data);
@@ -454,7 +597,7 @@ class SmartIntercomCard extends HTMLElement {
             };
 
             this._ws.onerror = () => {
-                this._showError('Connection error - check host/port/SSL settings');
+                this._showError('Connection error');
             };
         } catch (err) {
             this._showError('Failed to connect: ' + err.message);
@@ -462,6 +605,12 @@ class SmartIntercomCard extends HTMLElement {
     }
 
     async _startStreaming(mode, playback, mic) {
+        // Check if device is busy (alarm or doorbell playing)
+        if (this._espState.busy) {
+            this._showError(this._config.labels.busy);
+            return;
+        }
+
         if (!this._authenticated) {
             this._showError('Not connected');
             return;
@@ -601,10 +750,7 @@ class SmartIntercomCard extends HTMLElement {
         const stopBtn = this.shadowRoot.getElementById('btn-stop');
         const streamBtns = ['btn-fd', 'btn-listen', 'btn-speak'];
 
-        if (stopBtn) {
-            stopBtn.classList.toggle('hidden', !show);
-        }
-
+        if (stopBtn) stopBtn.classList.toggle('hidden', !show);
         streamBtns.forEach(id => {
             const btn = this.shadowRoot.getElementById(id);
             if (btn) btn.classList.toggle('hidden', show);
@@ -621,11 +767,10 @@ class SmartIntercomCard extends HTMLElement {
 
 customElements.define('smart-intercom-card', SmartIntercomCard);
 
-// Register for card picker
 window.customCards = window.customCards || [];
 window.customCards.push({
     type: 'smart-intercom-card',
     name: 'SmartIntercom Card',
-    description: 'Custom card for SmartIntercom ESP32 with audio streaming',
+    description: 'Audio streaming card for SmartIntercom ESP32',
     preview: true,
 });
