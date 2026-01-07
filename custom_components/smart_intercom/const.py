@@ -44,6 +44,7 @@ CMD_GET_ICONS = "get_icons"
 MSG_AUTH_REQUIRED = "auth_required"
 MSG_AUTH_SUCCESS = "auth_success"
 MSG_AUTH_FAILED = "auth_failed"
+MSG_ICON_LIST = "icon_list"
 
 # Streaming modes
 STREAM_MODE_IDLE = "idle"
@@ -58,4 +59,5 @@ ENTITY_MIC_GAIN = "mic_gain"
 ENTITY_SPEAKER_GAIN = "speaker_gain"
 
 # Platforms to setup
-PLATFORMS = ["button", "sensor", "number", "text", "media_player"]
+PLATFORMS = ["button", "sensor", "number", "text", "select", "media_player"]
+

@@ -10,12 +10,14 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
+    CMD_GET_ICONS,
     CONF_ENABLE_AUDIO,
     CONF_SECRET_KEY,
     CONF_USE_SSL,
     CMD_CLEAR_FIELD,
     CMD_SET_FIELD,
     DOMAIN,
+    MSG_ICON_LIST,
     PLATFORMS,
     STREAM_MODE_FULL_DUPLEX,
     STREAM_MODE_IDLE,
@@ -55,6 +57,12 @@ class SmartIntercomCoordinator(DataUpdateCoordinator):
             "display_line1": "",
             "display_line2": "",
             "external_text": "",
+            "icon_list": [],  # Available icons from ESP32
+            "marquee_fields": [  # 3 marquee field states
+                {"icon": "", "text": ""},
+                {"icon": "", "text": ""},
+                {"icon": "", "text": ""},
+            ],
         }
         
         # Audio buffer for media player
@@ -64,7 +72,15 @@ class SmartIntercomCoordinator(DataUpdateCoordinator):
     def on_message(self, data: dict) -> None:
         """Handle incoming JSON messages from device."""
         _LOGGER.debug("Received message: %s", data)
-        # Update state based on message type if needed
+        
+        msg_type = data.get("type", "")
+        
+        # Handle icon list response
+        if msg_type == MSG_ICON_LIST:
+            icons = data.get("icons", [])
+            self.data["icon_list"] = icons
+            _LOGGER.info("Received %d icons from device", len(icons))
+        
         self.async_set_updated_data(self.data)
 
     def on_audio(self, audio_data: bytes) -> None:
@@ -78,6 +94,10 @@ class SmartIntercomCoordinator(DataUpdateCoordinator):
         """Handle successful connection."""
         self.data["connected"] = True
         self.async_set_updated_data(self.data)
+        
+        # Request icon list from device
+        import asyncio
+        asyncio.create_task(self._fetch_icons())
 
     def on_disconnect(self) -> None:
         """Handle disconnection."""
@@ -107,6 +127,10 @@ class SmartIntercomCoordinator(DataUpdateCoordinator):
         self.data["streaming_mode"] = mode
         self.async_set_updated_data(self.data)
 
+    async def _fetch_icons(self) -> None:
+        """Fetch available icons from device."""
+        _LOGGER.debug("Fetching icon list from device")
+        await self.async_send_command(CMD_GET_ICONS)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up SmartIntercom from a config entry."""

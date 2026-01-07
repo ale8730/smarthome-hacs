@@ -14,6 +14,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import SmartIntercomCoordinator
 from .const import (
     CMD_SET_EXTERNAL_TEXT,
+    CMD_SET_FIELD,
     CMD_SET_TEXT,
     DOMAIN,
     MANUFACTURER,
@@ -27,7 +28,9 @@ class SmartIntercomTextDescription(TextEntityDescription):
 
     data_key: str = ""
     is_display_line: bool = False
+    is_marquee_field: bool = False
     line_number: int = 0
+    field_index: int = -1
 
 
 TEXT_DESCRIPTIONS: tuple[SmartIntercomTextDescription, ...] = (
@@ -53,6 +56,31 @@ TEXT_DESCRIPTIONS: tuple[SmartIntercomTextDescription, ...] = (
         icon="mdi:text-box-outline",
         data_key="external_text",
         is_display_line=False,
+    ),
+    # Marquee field texts - ordered after their corresponding icon selects
+    SmartIntercomTextDescription(
+        key="marquee_text_1",
+        name="Marquee Text 1",
+        icon="mdi:text",
+        data_key="marquee_text_0",
+        is_marquee_field=True,
+        field_index=0,
+    ),
+    SmartIntercomTextDescription(
+        key="marquee_text_2",
+        name="Marquee Text 2",
+        icon="mdi:text",
+        data_key="marquee_text_1",
+        is_marquee_field=True,
+        field_index=1,
+    ),
+    SmartIntercomTextDescription(
+        key="marquee_text_3",
+        name="Marquee Text 3",
+        icon="mdi:text",
+        data_key="marquee_text_2",
+        is_marquee_field=True,
+        field_index=2,
     ),
 )
 
@@ -109,7 +137,27 @@ class SmartIntercomText(CoordinatorEntity, TextEntity):
 
     async def async_set_value(self, value: str) -> None:
         """Set new text value."""
-        if self.entity_description.is_display_line:
+        if self.entity_description.is_marquee_field:
+            # For marquee fields, send set_field with current icon + new text
+            field_index = self.entity_description.field_index
+            marquee_data = self.coordinator.data.get("marquee_fields", [{}, {}, {}])
+            current_icon = ""
+            if field_index < len(marquee_data):
+                current_icon = marquee_data[field_index].get("icon", "")
+            
+            await self.coordinator.async_send_command(
+                CMD_SET_FIELD,
+                index=field_index,
+                icon=current_icon,
+                text=value,
+            )
+            
+            # Update local state
+            if field_index < len(marquee_data):
+                marquee_data[field_index]["text"] = value
+            self.coordinator.data["marquee_fields"] = marquee_data
+            
+        elif self.entity_description.is_display_line:
             # For display lines, we need to send both lines together
             line1 = self.coordinator.data.get("display_line1", "")
             line2 = self.coordinator.data.get("display_line2", "")
@@ -124,13 +172,16 @@ class SmartIntercomText(CoordinatorEntity, TextEntity):
                 line1=line1,
                 line2=line2,
             )
+            # Update local state
+            self.coordinator.data[self.entity_description.data_key] = value
         else:
             # External text
             await self.coordinator.async_send_command(
                 CMD_SET_EXTERNAL_TEXT,
                 text=value,
             )
+            # Update local state
+            self.coordinator.data[self.entity_description.data_key] = value
         
-        # Update local state
-        self.coordinator.data[self.entity_description.data_key] = value
         self.coordinator.async_set_updated_data(self.coordinator.data)
+

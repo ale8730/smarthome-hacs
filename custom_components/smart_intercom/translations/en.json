@@ -83,6 +83,26 @@
             },
             "external_text": {
                 "name": "External Text"
+            },
+            "marquee_text_1": {
+                "name": "Marquee Text 1"
+            },
+            "marquee_text_2": {
+                "name": "Marquee Text 2"
+            },
+            "marquee_text_3": {
+                "name": "Marquee Text 3"
+            }
+        },
+        "select": {
+            "marquee_icon_1": {
+                "name": "Marquee Icon 1"
+            },
+            "marquee_icon_2": {
+                "name": "Marquee Icon 2"
+            },
+            "marquee_icon_3": {
+                "name": "Marquee Icon 3"
             }
         },
         "media_player": {

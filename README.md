@@ -120,11 +120,24 @@ Use SSL: ✓ (checked)
 | `text.smartintercom_display_line_1` | First line of OLED display |
 | `text.smartintercom_display_line_2` | Second line of OLED display |
 | `text.smartintercom_external_text` | Status text below display box |
+| `text.smartintercom_marquee_text_1` | Text for marquee field 1 |
+| `text.smartintercom_marquee_text_2` | Text for marquee field 2 |
+| `text.smartintercom_marquee_text_3` | Text for marquee field 3 |
+
+### Marquee Icon Selects
+| Entity | Description |
+|--------|-------------|
+| `select.smartintercom_marquee_icon_1` | Icon for marquee field 1 |
+| `select.smartintercom_marquee_icon_2` | Icon for marquee field 2 |
+| `select.smartintercom_marquee_icon_3` | Icon for marquee field 3 |
+
+> 💡 **Tip**: The icon list is fetched from the ESP32's `/icons/10x10/` directory. Select "none" to clear the icon.
 
 ### Media Player
 | Entity | Features |
 |--------|----------|
 | `media_player.smartintercom_audio_stream` | Play/Stop, Volume control |
+
 
 ## 🔧 Services
 
@@ -230,38 +243,87 @@ Go to **Settings** → **Dashboards** → **⋮** (top right) → **Resources** 
 
 Edit your Lovelace dashboard and add a **Manual card** with this YAML:
 
-**Local Connection (direct to ESP32):**
+**Minimal Configuration:**
 ```yaml
 type: custom:smart-intercom-card
-host: 192.168.1.100      # Your ESP32 IP
-port: 80
+host: 192.168.1.100
 secret_key: SmartIntercom2026
-name: Front Door Intercom
-use_ssl: false           # Use ws:// (no SSL)
-show_controls: true
+```
+
+**Complete Configuration with All Options:**
+```yaml
+type: custom:smart-intercom-card
+
+# Connection settings
+host: 192.168.1.100           # ESP32 IP or proxy domain
+port: 80                       # 80 for local, 443 for SSL proxy
+secret_key: SmartIntercom2026  # Must match ESP32 config
+use_ssl: false                 # true for wss://, false for ws://
+name: Front Door Intercom      # Card title
+
+# Button visibility (all default to true)
+show_full_duplex: true
+show_listen: true
+show_speak: true
+show_doorbell: true
+show_alarm: true
 show_gain: true
+show_visualizer: true
+
+# Custom button labels
+labels:
+  full_duplex: "Call"
+  listen: "Listen"
+  speak: "Speak"
+  stop: "Stop"
+  doorbell: "Ring Bell"
+  alarm_start: "Alarm"
+  alarm_stop: "Stop Alarm"
+  mic_gain: "Microphone"
+  speaker_gain: "Speaker"
+
+# Custom colors (CSS color values)
+colors:
+  primary: "var(--primary-color)"    # Default HA primary
+  streaming: "#4caf50"               # Green when streaming
+  stop: "#f44336"                    # Red for stop button
+  secondary: "#757575"               # Secondary text
+  visualizer: "var(--primary-color)" # Visualizer bars
 ```
 
 **Proxy Connection (via HTTPS reverse proxy):**
 ```yaml
 type: custom:smart-intercom-card
-host: talkie.yourdomain.com  # Your proxy domain
+host: talkie.yourdomain.com
 port: 443
 secret_key: SmartIntercom2026
-name: Front Door Intercom
-use_ssl: true            # Use wss:// (SSL)
-show_controls: true
-show_gain: true
+use_ssl: true
+name: SmartIntercom
+```
+
+**Minimal Listen-Only Card:**
+```yaml
+type: custom:smart-intercom-card
+host: 192.168.1.100
+secret_key: SmartIntercom2026
+show_full_duplex: false
+show_speak: false
+show_doorbell: false
+show_alarm: false
+show_gain: false
 ```
 
 ### Card Features
-- 🎙️ **Audio Visualizer** - Real-time audio level display
+- 🎙️ **Audio Visualizer** - Real-time audio level display with customizable colors
 - 📞 **Full-Duplex** - Two-way conversation with ESP32
 - 👂 **Listen Mode** - Monitor intercom microphone
 - 📢 **Speak Mode** - Send audio to ESP32 speaker
 - 🔔 **Quick Actions** - Doorbell, Alarm buttons
 - 🎚️ **Gain Sliders** - Adjust mic/speaker volume
 - 🔒 **SSL Support** - Works with HTTPS reverse proxy
+- 🎨 **Customizable** - Labels, colors, and button visibility
+- 🏠 **HA Native Styling** - Matches your Home Assistant theme
+
 
 ## ⚠️ HTTPS / Mixed Content Issue
 
