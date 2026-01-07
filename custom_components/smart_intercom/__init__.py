@@ -198,6 +198,7 @@ async def async_register_services(hass: HomeAssistant) -> None:
 async def async_register_frontend(hass: HomeAssistant) -> None:
     """Register the custom Lovelace card."""
     import os
+    from homeassistant.components.http import StaticPathConfig
     
     # Get the path to our JavaScript file
     card_path = os.path.join(os.path.dirname(__file__), "www", "smart-intercom-card.js")
@@ -206,12 +207,14 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
         _LOGGER.warning("SmartIntercom card file not found at %s", card_path)
         return
 
-    # Register as a static path (avoiding /local/ prefix to prevent HA internal conflicts)
-    hass.http.register_static_path(
-        f"/{DOMAIN}/smart-intercom-card.js",
-        card_path,
-        cache_headers=False,
-    )
+    # Register as a static path using the new async API
+    await hass.http.async_register_static_paths([
+        StaticPathConfig(
+            url_path=f"/{DOMAIN}/smart-intercom-card.js",
+            path=card_path,
+            cache_headers=False,
+        )
+    ])
     
     _LOGGER.info(
         "SmartIntercom card registered at /%s/smart-intercom-card.js",
