@@ -200,6 +200,11 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
     import os
     from homeassistant.components.http import StaticPathConfig
     
+    # Check if already registered (avoid duplicate registration error)
+    frontend_key = f"{DOMAIN}_frontend_registered"
+    if hass.data.get(frontend_key):
+        return
+    
     # Get the path to our JavaScript file
     card_path = os.path.join(os.path.dirname(__file__), "www", "smart-intercom-card.js")
     
@@ -207,17 +212,24 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
         _LOGGER.warning("SmartIntercom card file not found at %s", card_path)
         return
 
-    # Register as a static path using the new async API
-    await hass.http.async_register_static_paths([
-        StaticPathConfig(
-            url_path=f"/{DOMAIN}/smart-intercom-card.js",
-            path=card_path,
-            cache_headers=False,
+    try:
+        # Register as a static path using the new async API
+        await hass.http.async_register_static_paths([
+            StaticPathConfig(
+                url_path=f"/{DOMAIN}/smart-intercom-card.js",
+                path=card_path,
+                cache_headers=False,
+            )
+        ])
+        
+        # Mark as registered
+        hass.data[frontend_key] = True
+        
+        _LOGGER.info(
+            "SmartIntercom card registered at /%s/smart-intercom-card.js",
+            DOMAIN,
         )
-    ])
-    
-    _LOGGER.info(
-        "SmartIntercom card registered at /%s/smart-intercom-card.js",
-        DOMAIN,
-    )
-
+    except RuntimeError as err:
+        # Route already registered (e.g., during reload)
+        _LOGGER.debug("Frontend already registered: %s", err)
+        hass.data[frontend_key] = True
