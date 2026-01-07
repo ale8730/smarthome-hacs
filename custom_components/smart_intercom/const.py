@@ -9,9 +9,11 @@ CONF_HOST = "host"
 CONF_PORT = "port"
 CONF_SECRET_KEY = "secret_key"
 CONF_ENABLE_AUDIO = "enable_audio"
+CONF_USE_SSL = "use_ssl"
 
 DEFAULT_PORT = 80
 DEFAULT_ENABLE_AUDIO = True
+DEFAULT_USE_SSL = False
 
 # Audio parameters (must match ESP32 config)
 AUDIO_SAMPLE_RATE = 16000

@@ -22,14 +22,15 @@ class SmartIntercomCard extends HTMLElement {
     }
 
     setConfig(config) {
-        if (!config.host) throw new Error('Specify host (IP)');
+        if (!config.host) throw new Error('Specify host (IP or domain)');
         this._config = {
             host: config.host,
-            port: config.port || 80,
+            port: config.port || (config.use_ssl ? 443 : 80),
             secret_key: config.secret_key || '',
             name: config.name || 'SmartIntercom',
             show_controls: config.show_controls !== false,
             show_gain: config.show_gain !== false,
+            use_ssl: config.use_ssl || false,
         };
         this._render();
     }
@@ -97,25 +98,42 @@ class SmartIntercomCard extends HTMLElement {
 
     _connect() {
         if (this._ws) this._ws.close();
-        const wsUrl = `ws://${this._config.host}:${this._config.port}/audio_stream`;
-        this._ws = new WebSocket(wsUrl);
-        this._ws.binaryType = 'arraybuffer';
-        this._ws.onopen = () => this._ws.send(JSON.stringify({ cmd: 'auth', key: this._config.secret_key }));
-        this._ws.onmessage = (e) => {
-            if (typeof e.data === 'string') {
-                const data = JSON.parse(e.data);
-                if (data.type === 'auth_success') {
-                    this._authenticated = true;
-                    this._updateStatus('Connected', 'connected');
+        // Use wss:// for SSL/proxy, ws:// for local
+        const protocol = this._config.use_ssl ? 'wss' : 'ws';
+        const port = this._config.port;
+        // For SSL on port 443, don't include port in URL
+        const wsUrl = (this._config.use_ssl && port === 443)
+            ? `${protocol}://${this._config.host}/audio_stream`
+            : `${protocol}://${this._config.host}:${port}/audio_stream`;
+
+        try {
+            this._ws = new WebSocket(wsUrl);
+            this._ws.binaryType = 'arraybuffer';
+            this._ws.onopen = () => this._ws.send(JSON.stringify({ cmd: 'auth', key: this._config.secret_key }));
+            this._ws.onmessage = (e) => {
+                if (typeof e.data === 'string') {
+                    const data = JSON.parse(e.data);
+                    if (data.type === 'auth_success') {
+                        this._authenticated = true;
+                        this._updateStatus('Connected', 'connected');
+                    } else if (data.type === 'auth_failed') {
+                        this._showError('Authentication failed');
+                    }
+                } else if (this._isStreaming && this._enablePlayback) {
+                    this._playAudio(e.data);
                 }
-            } else if (this._isStreaming && this._enablePlayback) {
-                this._playAudio(e.data);
-            }
-        };
-        this._ws.onclose = () => {
-            this._updateStatus('Disconnected', 'disconnected');
-            setTimeout(() => this._connect(), 5000);
-        };
+            };
+            this._ws.onclose = () => {
+                this._authenticated = false;
+                this._updateStatus('Disconnected', 'disconnected');
+                setTimeout(() => this._connect(), 5000);
+            };
+            this._ws.onerror = (err) => {
+                this._showError('Connection error - check host/port/SSL settings');
+            };
+        } catch (err) {
+            this._showError('Failed to connect: ' + err.message);
+        }
     }
 
     async _startStreaming(mode, playback, mic) {

@@ -12,6 +12,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from .const import (
     CONF_ENABLE_AUDIO,
     CONF_SECRET_KEY,
+    CONF_USE_SSL,
     CMD_CLEAR_FIELD,
     CMD_SET_FIELD,
     DOMAIN,
@@ -113,12 +114,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     port = entry.data[CONF_PORT]
     secret_key = entry.data[CONF_SECRET_KEY]
     enable_audio = entry.data.get(CONF_ENABLE_AUDIO, True)
+    use_ssl = entry.data.get(CONF_USE_SSL, False)
 
     # Create WebSocket client
     client = SmartIntercomClient(
         host=host,
         port=port,
         secret_key=secret_key,
+        use_ssl=use_ssl,
     )
 
     # Create coordinator

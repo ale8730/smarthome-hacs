@@ -15,8 +15,10 @@ from homeassistant.exceptions import HomeAssistantError
 from .const import (
     CONF_ENABLE_AUDIO,
     CONF_SECRET_KEY,
+    CONF_USE_SSL,
     DEFAULT_ENABLE_AUDIO,
     DEFAULT_PORT,
+    DEFAULT_USE_SSL,
     DOMAIN,
 )
 
@@ -28,6 +30,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
         vol.Required(CONF_SECRET_KEY): str,
         vol.Optional(CONF_ENABLE_AUDIO, default=DEFAULT_ENABLE_AUDIO): bool,
+        vol.Optional(CONF_USE_SSL, default=DEFAULT_USE_SSL): bool,
     }
 )
 
@@ -39,8 +42,15 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     host = data[CONF_HOST]
     port = data[CONF_PORT]
     secret_key = data[CONF_SECRET_KEY]
+    use_ssl = data.get(CONF_USE_SSL, False)
     
-    ws_url = f"ws://{host}:{port}/audio_stream"
+    # Use wss:// for SSL/proxy connections, ws:// for local
+    protocol = "wss" if use_ssl else "ws"
+    # For SSL connections (typically port 443), don't append port
+    if use_ssl and port == 443:
+        ws_url = f"{protocol}://{host}/audio_stream"
+    else:
+        ws_url = f"{protocol}://{host}:{port}/audio_stream"
     
     try:
         async with websockets.connect(ws_url, close_timeout=5) as ws:

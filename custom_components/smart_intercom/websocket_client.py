@@ -27,6 +27,7 @@ class SmartIntercomClient:
         host: str,
         port: int,
         secret_key: str,
+        use_ssl: bool = False,
         on_message: Callable[[dict], None] | None = None,
         on_audio: Callable[[bytes], None] | None = None,
         on_disconnect: Callable[[], None] | None = None,
@@ -36,6 +37,7 @@ class SmartIntercomClient:
         self._host = host
         self._port = port
         self._secret_key = secret_key
+        self._use_ssl = use_ssl
         self._ws: WebSocketClientProtocol | None = None
         self._connected = False
         self._authenticated = False
@@ -57,7 +59,11 @@ class SmartIntercomClient:
     @property
     def ws_url(self) -> str:
         """Return the WebSocket URL."""
-        return f"ws://{self._host}:{self._port}/audio_stream"
+        protocol = "wss" if self._use_ssl else "ws"
+        # For SSL connections on port 443, don't include port in URL
+        if self._use_ssl and self._port == 443:
+            return f"{protocol}://{self._host}/audio_stream"
+        return f"{protocol}://{self._host}:{self._port}/audio_stream"
 
     async def connect(self) -> bool:
         """Connect to the WebSocket server."""

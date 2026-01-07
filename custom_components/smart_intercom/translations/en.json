@@ -5,10 +5,11 @@
                 "title": "SmartIntercom Setup",
                 "description": "Configure connection to your SmartIntercom ESP32 device.",
                 "data": {
-                    "host": "Host (IP Address)",
+                    "host": "Host (IP Address or Domain)",
                     "port": "Port",
                     "secret_key": "Secret Key",
-                    "enable_audio": "Enable Audio Streaming"
+                    "enable_audio": "Enable Audio Streaming",
+                    "use_ssl": "Use SSL (for HTTPS proxy)"
                 }
             }
         },

@@ -62,12 +62,28 @@ config/
 
 | Field | Description | Example |
 |-------|-------------|---------|
-| **Host** | IP address of your ESP32 | `192.168.1.100` |
-| **Port** | WebSocket port (default: 80) | `80` |
+| **Host** | IP address or domain of your ESP32 (or proxy) | `192.168.1.100` or `talkie.example.com` |
+| **Port** | WebSocket port (80 for local, 443 for SSL proxy) | `80` or `443` |
 | **Secret Key** | Authentication key (from `config.h`) | `SmartIntercom2026` |
 | **Enable Audio** | Enable audio streaming features | ✓ |
+| **Use SSL** | Enable for HTTPS proxy (wss:// instead of ws://) | ✓ for proxy |
+
+### Local Connection (Direct to ESP32)
+```
+Host: 192.168.1.98
+Port: 80
+Use SSL: ❌ (unchecked)
+```
+
+### Proxy Connection (via reverse proxy with SSL)
+```
+Host: talkie.yourdomain.com
+Port: 443
+Use SSL: ✓ (checked)
+```
 
 > ⚠️ **Important**: The secret key must match the `WS_SECRET_KEY` defined in your ESP32's `config.h` file.
+
 
 ## 🎛️ Available Entities
 
@@ -206,21 +222,36 @@ Go to **Settings** → **Dashboards** → **⋮** (top right) → **Resources** 
 
 | Field | Value |
 |-------|-------|
-| URL | `/local/community/smart_intercom/smart-intercom-card.js` |
+| URL | `/smart_intercom/smart-intercom-card.js` |
 | Type | JavaScript Module |
+
 
 ### Step 2: Add the card to your dashboard
 
 Edit your Lovelace dashboard and add a **Manual card** with this YAML:
 
+**Local Connection (direct to ESP32):**
 ```yaml
 type: custom:smart-intercom-card
 host: 192.168.1.100      # Your ESP32 IP
 port: 80
 secret_key: SmartIntercom2026
 name: Front Door Intercom
-show_controls: true      # Show doorbell/alarm buttons
-show_gain: true          # Show volume sliders
+use_ssl: false           # Use ws:// (no SSL)
+show_controls: true
+show_gain: true
+```
+
+**Proxy Connection (via HTTPS reverse proxy):**
+```yaml
+type: custom:smart-intercom-card
+host: talkie.yourdomain.com  # Your proxy domain
+port: 443
+secret_key: SmartIntercom2026
+name: Front Door Intercom
+use_ssl: true            # Use wss:// (SSL)
+show_controls: true
+show_gain: true
 ```
 
 ### Card Features
@@ -230,10 +261,56 @@ show_gain: true          # Show volume sliders
 - 📢 **Speak Mode** - Send audio to ESP32 speaker
 - 🔔 **Quick Actions** - Doorbell, Alarm buttons
 - 🎚️ **Gain Sliders** - Adjust mic/speaker volume
+- 🔒 **SSL Support** - Works with HTTPS reverse proxy
 
-> ⚠️ **HTTPS Note**: If Home Assistant uses HTTPS, your browser may block the WebSocket connection to the ESP32 (ws://). To fix this, either:
-> - Access HA via HTTP for the intercom page
-> - Or configure the ESP32 with SSL certificates (advanced)
+## ⚠️ HTTPS / Mixed Content Issue
+
+**Problem**: When accessing Home Assistant via HTTPS (e.g., `https://ha.example.com`), browsers block WebSocket connections to the ESP32 over insecure `ws://` protocol. You'll see this error:
+
+```
+Mixed Content: The page was loaded over HTTPS, but attempted to connect 
+to the insecure WebSocket endpoint 'ws://192.168.1.x/audio_stream'.
+```
+
+### Solution 1: Access HA via HTTP (Easiest)
+
+For the audio card to work, access Home Assistant using HTTP instead of HTTPS:
+- Use `http://192.168.1.x:8123` (your HA local IP)
+- Or configure a separate HTTP-only domain/port for intercom use
+
+### Solution 2: Use the ESP32 Web Interface Directly
+
+The ESP32 has a built-in web interface with full audio support. Add an **iframe card** to your dashboard:
+
+```yaml
+type: iframe
+url: "http://192.168.1.98/"
+aspect_ratio: "4:3"
+```
+
+> **Note**: This iframe will also be blocked on HTTPS pages. Access HA via HTTP or use a separate browser tab.
+
+### Solution 3: ESP32 with SSL (Advanced)
+
+Configure the ESP32 to serve WebSocket over WSS (requires self-signed or valid SSL certificate). This requires firmware modifications.
+
+### Solution 4: Reverse Proxy with WebSocket Upgrade
+
+Set up a reverse proxy (like nginx) that:
+1. Terminates SSL for your domain
+2. Proxies WebSocket connections to the ESP32
+
+Example nginx config:
+```nginx
+location /intercom-ws/ {
+    proxy_pass http://192.168.1.98/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+}
+```
+
+Then update the card config to use the proxy path.
 
 ## 🐛 Troubleshooting
 
@@ -241,15 +318,25 @@ show_gain: true          # Show volume sliders
 - Verify the ESP32 IP address is correct
 - Ensure port 80 is not blocked by firewall
 - Check that the ESP32 is running and connected to WiFi
+- If using HTTPS, see the section above about Mixed Content
 
 ### Authentication failed
 - Verify the secret key matches `WS_SECRET_KEY` in ESP32's `config.h`
 - Default key: `SmartIntercom2026`
 
-### No audio
-- Ensure "Enable Audio" is checked in integration settings
-- Start listen mode before expecting audio
-- Check speaker/microphone connections on ESP32
+### No audio in custom card
+- Check browser console for errors (F12 → Console)
+- Ensure you're accessing HA via HTTP (not HTTPS)
+- Allow microphone access when browser prompts
+- Check that ESP32 is responding to WebSocket connections
+
+### Card shows "Disconnected"
+- Verify ESP32 IP and port in card config
+- Check ESP32 serial monitor for connection attempts
+- Ensure only one WebSocket client is connected (ESP32 supports 1 client)
+
+### Integration works but card doesn't
+The integration uses HA's Python backend for WebSocket, which doesn't have the HTTPS restriction. The card uses browser JavaScript, which does. Use the integration buttons/entities for control when on HTTPS.
 
 ## 📝 License
 
@@ -257,5 +344,6 @@ This integration is provided for personal use with the SmartIntercom ESP32 proje
 
 ## 🤝 Support
 
-- **Issues**: [GitHub Issues](https://github.com/ale8730/SmartIntercom/issues)
+- **Issues**: [GitHub Issues](https://github.com/ale8730/smarthome-hacs/issues)
+- **ESP32 Project**: [SmartIntercom](https://github.com/ale8730/SmartIntercom)
 - **Documentation**: See `api.md` in the SmartIntercom project
