@@ -196,7 +196,44 @@ The integration supports bidirectional audio streaming:
 | **Listen** | ESP32 → HA | Monitor intercom audio |
 | **Speak** | HA → ESP32 | Announcements, TTS |
 
-Use the **Media Player** entity to listen to the intercom audio stream directly in your Home Assistant dashboard.
+## 🎴 Custom Lovelace Card
+
+This integration includes a **custom Lovelace card** with real audio streaming in the browser!
+
+### Step 1: Add the card resource
+
+Go to **Settings** → **Dashboards** → **⋮** (top right) → **Resources** → **Add Resource**:
+
+| Field | Value |
+|-------|-------|
+| URL | `/local/community/smart_intercom/smart-intercom-card.js` |
+| Type | JavaScript Module |
+
+### Step 2: Add the card to your dashboard
+
+Edit your Lovelace dashboard and add a **Manual card** with this YAML:
+
+```yaml
+type: custom:smart-intercom-card
+host: 192.168.1.100      # Your ESP32 IP
+port: 80
+secret_key: SmartIntercom2026
+name: Front Door Intercom
+show_controls: true      # Show doorbell/alarm buttons
+show_gain: true          # Show volume sliders
+```
+
+### Card Features
+- 🎙️ **Audio Visualizer** - Real-time audio level display
+- 📞 **Full-Duplex** - Two-way conversation with ESP32
+- 👂 **Listen Mode** - Monitor intercom microphone
+- 📢 **Speak Mode** - Send audio to ESP32 speaker
+- 🔔 **Quick Actions** - Doorbell, Alarm buttons
+- 🎚️ **Gain Sliders** - Adjust mic/speaker volume
+
+> ⚠️ **HTTPS Note**: If Home Assistant uses HTTPS, your browser may block the WebSocket connection to the ESP32 (ws://). To fix this, either:
+> - Access HA via HTTP for the intercom page
+> - Or configure the ESP32 with SSL certificates (advanced)
 
 ## 🐛 Troubleshooting
 

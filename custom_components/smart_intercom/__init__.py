@@ -145,6 +145,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Register services
     await async_register_services(hass)
 
+    # Register frontend card
+    await async_register_frontend(hass)
+
     return True
 
 
@@ -190,3 +193,26 @@ async def async_register_services(hass: HomeAssistant) -> None:
     
     if not hass.services.has_service(DOMAIN, "clear_marquee_field"):
         hass.services.async_register(DOMAIN, "clear_marquee_field", handle_clear_marquee_field)
+
+
+async def async_register_frontend(hass: HomeAssistant) -> None:
+    """Register the custom Lovelace card."""
+    from homeassistant.components.frontend import async_register_built_in_panel
+    from homeassistant.components.lovelace.resources import ResourceStorageCollection
+    import os
+    
+    # Get the path to our JavaScript file
+    card_path = os.path.join(os.path.dirname(__file__), "www", "smart-intercom-card.js")
+    
+    # Register as a local resource
+    hass.http.register_static_path(
+        f"/local/community/{DOMAIN}/smart-intercom-card.js",
+        card_path,
+        cache_headers=False,
+    )
+    
+    _LOGGER.info(
+        "SmartIntercom card registered at /local/community/%s/smart-intercom-card.js",
+        DOMAIN,
+    )
+
